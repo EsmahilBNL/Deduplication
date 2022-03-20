@@ -1,0 +1,31 @@
+#!/bin/sh
+echo " We delete the deduplicaton value $(date)"> /root/log_dedupli
+mysql -u <User> <Passwd> <table> -e "delete from dedupe_bk;" >> /root/log_dedupli
+ 
+echo "The previous hour $(date)">> /root/log_dedupli
+
+
+mysql -u <User> <Passwd> <table> -e "insert into dedupe select * from syslog where fecha like date_format(now(),'%d/%m/%Y') and hora like date_format(now() - INTERVAL 1 HOUR,'%H:%');" >> /root/log_dedupli
+echo "pasamos 1 hora anterior a pru_dedupe_bk $(date)">> /root/log_dedupli
+
+mysql -u <User> <Passwd> <table> -e "insert into dedupe_bk select * from syslog where fecha like date_format(now(),'%d/%m/%Y') and hora like date_format(now() - INTERVAL 1 HOUR,'%H:%');" >> /root/log_dedupli
+echo "We detect only value $(date)">> /root/log_dedupli
+mysql -u <User> <Passwd> <table> -e "insert into consolidado (unixtime,fecha,hora,facility,priority,host,ip,program,pid,message) select unixtime,fecha,hora,facility,priority,host,ip,program,pid,message from dedupe GROUP BY message, ip, unixtime HAVING COUNT(*)=1;" >> /root/log_dedupli
+
+ echo "We detect only deduplication  $(date)" >> /root/log_dedupli
+ mysql -u <User> <Passwd> <table> -e "insert into consolidado         (unixtime,fecha,hora,facility,priority,host,ip,program,pid,message) select unixtime,fecha,hora,facility,priority,host,ip,program,pid,message from dedupe GROUP BY message, ip, unixtime HAVING COUNT(*)>1;" >> /root/log_dedupli
+ 
+ echo "Delete table dedupplication $(date)" >> /root/log_dedupli
+ mysql -u <User> <Passwd> <table> -e "delete from dedupe;" >> /root/log_dedupli
+
+ echo "borramos hora anterior de syslog $(date)" >> /root/log_dedupli
+ mysql -u <User> <Passwd> <table> -e "delete from syslog where hora like      date_format(now() - INTERVAL 1 HOUR,'%H:%');">> /root/log_dedupli
+ echo "Finalizamos $(date)" >> /root/log_dedupli
+ 
+  #Check we don't have errors
+longitud=$(echo $(wc -l /root/log_dedupli) | awk -F'[ ]' '{print $1}')
+ 
+    if [ "$longitud" -ne 8 ]
+    then
+    mv /root/log_dedupli /root/log_dedupli_error_$(date +%d/%m/%Y_%H:%M)
+    fi
